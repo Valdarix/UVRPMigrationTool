@@ -228,8 +228,11 @@ namespace UVRPV2tov3Migration
                 var updatedJson = JsonConvert.SerializeObject(items);
                 NewStash = updatedJson;
             }
-
-            rt1.Text = NewStash;
+            var updateSql = $"\nUPDATE StashItems SET Items = '{NewStash}' WHERE Stash = '{newStash.Text}' ";
+            var updateSqlMoney = $" UPDATE players SET Money = '{NewMoney}' WHERE CitizenID = '{CitizenID.Text}'";
+            rt1.Text = updateSqlMoney;
+            rt1.Text += updateSql;
+            
         }
         private Dictionary<string, dynamic> GetLUAItems(string luaFilePath)
         {
