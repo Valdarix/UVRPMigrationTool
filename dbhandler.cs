@@ -46,7 +46,6 @@ namespace UVRPV2tov3Migration
                 // perform database operations here...
                 var cmd = new MySqlCommand(q, conn);
 
-
                 using IDataReader rdr = cmd.ExecuteReader(CommandBehavior.CloseConnection);
                 var dt = new DataTable();
                 dt.Load(rdr);

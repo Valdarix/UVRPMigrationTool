@@ -9,6 +9,9 @@ namespace UVRPV2tov3Migration
 {
     public partial class LoadNext : Form
     {
+        
+        //TODO: refactor variables to make more sense
+        //TODO: Build List of players and remove completed ones from the list
         private DataTable rawData;
         private List<PlayerData> players = new List<PlayerData>();
         private List<Vehicle> allVehicles = new List<Vehicle>();
@@ -130,7 +133,20 @@ namespace UVRPV2tov3Migration
                     //This is the amount needed to be reimbursed for cars. 
                     TotalValueOfVehicles = TotalValueOfVehicles + currPlayerReimburse;
                 }
+
             }
+            //Now that we have the reimbursement value for the cars lets add any savings account data
+            var qryBank = $"SELECT * FROM bank_accounts  WHERE account_type and CitizenID = '{CitizenID.Text}'";
+            var readerBank = DB.GetDataReader(edtServer.Text, UserName.Text, DBame.Text, qryBank);
+            
+            foreach (DataRow row in readerBank.Rows)
+            {
+                var savings =  $"{row["amount"]}".Replace(",", "");
+                var intSavings = int.Parse(savings);
+                //add the savings amount to the total vehicle amount
+                TotalValueOfVehicles = TotalValueOfVehicles + intSavings;
+            }
+            
             remiburseAmt.Text = TotalValueOfVehicles.ToString();
 
 
