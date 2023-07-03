@@ -12,8 +12,8 @@ namespace UVRPV2tov3Migration
         private DataTable rawData;
         private List<PlayerData> players = new List<PlayerData>();
         private List<Vehicle> allVehicles = new List<Vehicle>();
-        private String NewStash;
-        private String NewMoney;
+        private string NewStash;
+        private string NewMoney;
 
         private int TotalValueOfVehicles = 0;
 
@@ -30,19 +30,19 @@ namespace UVRPV2tov3Migration
             CitizenID.ResetText();
             PlayerLiscense.ResetText();
             TotalValueOfVehicles = 0;
-            NewStash = String.Empty;
+            NewStash = string.Empty;
         }
 
         private void LoadData(object sender, EventArgs e)
         {
             // This method is used to load the source data form the old/backup database.
-            string qry = $"SELECT CitizenID, License, NAME, CharInfo FROM Players";
+            var qry = $"SELECT CitizenID, License, NAME, CharInfo FROM Players";
             var reader = DB.GetDataReader(edtServer.Text, UserName.Text, DBame.Text, qry);
 
             foreach (DataRow row in reader.Rows)
             {
                 // Get Player Names for the drop down
-                var CurrCharInfo = JsonConvert.DeserializeObject<CharInfo>(DB.GetStrData(row, "CharInfo"));
+                var CurrCharInfo = JsonConvert.DeserializeObject<CharInfo>(DB.GetStrData(row, "CharInfo") ?? string.Empty);
                 var CurrentPlayerName = $"{CurrCharInfo.Firstname} {CurrCharInfo.Lastname}";              
 
                 //Put the PlayerData into an array.
@@ -92,22 +92,20 @@ namespace UVRPV2tov3Migration
 
             lua.DoString(scriptRaw);
 
-            var vehicles = lua["QBShared.Vehicles"] as LuaTable;
-
-            foreach (KeyValuePair<object, object> vehicle in vehicles)
-            {
-                var properties = vehicle.Value as LuaTable;
-                var currCar = new Vehicle()
+            if (lua["QBShared.Vehicles"] is LuaTable vehicles)
+                foreach (KeyValuePair<object, object> vehicle in vehicles)
                 {
-                    ID = $"\t{vehicle.Key}",
-                    Price = $"{properties["price"]}"
-                };
-                allVehicles.Add(currCar);
-                     
-            }
+                    var properties = vehicle.Value as LuaTable;
+                    var currCar = new Vehicle()
+                    {
+                        ID = $"\t{vehicle.Key}",
+                        Price = $"{properties?["price"]}"
+                    };
+                    allVehicles.Add(currCar);
+                }
 
             // Now that we have the price list, lets see what the player has and use the balances to determine how much money they need reimbursed. Also determine the contents of the iventories and store them.
-            string qry = $"SELECT License, CitizenID, Vehicle, pv.Plate, ti.items AS TrunkStorage, gb.items AS GloveBoxStorage, balance FROM Player_vehicles as pv left join trunkitems AS ti ON pv.plate = ti.plate left JOIN gloveboxitems AS gb ON pv.plate = gb.plate WHERE citizenID = '{CitizenID.Text}'";
+            var qry = $"SELECT License, CitizenID, Vehicle, pv.Plate, ti.items AS TrunkStorage, gb.items AS GloveBoxStorage, balance FROM Player_vehicles as pv left join trunkitems AS ti ON pv.plate = ti.plate left JOIN gloveboxitems AS gb ON pv.plate = gb.plate WHERE citizenID = '{CitizenID.Text}'";
             var reader = DB.GetDataReader(edtServer.Text, UserName.Text, DBame.Text, qry);
             
             foreach (DataRow row in reader.Rows)
@@ -118,19 +116,20 @@ namespace UVRPV2tov3Migration
                 var currPlayerCarBalance = $"{row["balance"]}";
                 var vehicleLookup = allVehicles.FirstOrDefault(v => v.ID == $"\t{currPlayerCar}");
                 var currPlayerCarPrice = vehicleLookup?.Price;
-                var currPlayerReimburse = int.Parse(currPlayerCarPrice) - int.Parse(currPlayerCarBalance);
+                if (currPlayerCarPrice != null)
+                {
+                    var currPlayerReimburse = int.Parse(currPlayerCarPrice) - int.Parse(currPlayerCarBalance);
 
-                // Add itmes to their inventory for later processing what is left to reimburse
+                    // Add itmes to their inventory for later processing what is left to reimburse
 
-                if (row["TrunkStorage"] != DBNull.Value)
-                    currPlayer?.Inventory.Add($"{row["TrunkStorage"]}");
-                if (row["GloveBoxStorage"] != DBNull.Value)
-                    currPlayer?.Inventory.Add($"{row["GloveBoxStorage"]}");
+                    if (row["TrunkStorage"] != DBNull.Value)
+                        currPlayer?.Inventory.Add($"{row["TrunkStorage"]}");
+                    if (row["GloveBoxStorage"] != DBNull.Value)
+                        currPlayer?.Inventory.Add($"{row["GloveBoxStorage"]}");
 
-                //This is the amount needed to be reimbursed for cars. 
-                TotalValueOfVehicles = TotalValueOfVehicles + currPlayerReimburse;
-
-                
+                    //This is the amount needed to be reimbursed for cars. 
+                    TotalValueOfVehicles = TotalValueOfVehicles + currPlayerReimburse;
+                }
             }
             remiburseAmt.Text = TotalValueOfVehicles.ToString();
 
@@ -148,7 +147,7 @@ namespace UVRPV2tov3Migration
 
             //Now to be really clever we can connect to the new DB and combine that stash inventory as well. It will also give us the inventory stash number for the new database
             //newStash from new database
-            string qryNewStash = $"SELECT players.CitizenId, stash, Items as StashStorage, money FROM players LEFT Join Apartments AS ap ON players.CitizenId = ap.CitizenID LEFT JOIN stashitems AS SI ON ap.name = SI.stash WHERE ap.citizenID = '{CitizenID.Text}'";
+            var qryNewStash = $"SELECT players.CitizenId, stash, Items as StashStorage, money FROM players LEFT Join Apartments AS ap ON players.CitizenId = ap.CitizenID LEFT JOIN stashitems AS SI ON ap.name = SI.stash WHERE ap.citizenID = '{CitizenID.Text}'";
             var readerNewStash = DB.GetDataReaderNewDB(destinationServer.Text, destinationUser.Text, destinationDB.Text, qryNewStash);
 
             var playerMoneyObject = "";
@@ -165,29 +164,28 @@ namespace UVRPV2tov3Migration
 
             //parse our money add it to the reimbursement total and update the players new money value. 
             dynamic parsed = JsonConvert.DeserializeObject(playerMoneyObject);
-            parsed.bank = parsed.bank + TotalValueOfVehicles;
-            newBankVal.Text = parsed.bank;
-            NewMoney = JsonConvert.SerializeObject(parsed);
-              
-            CombineJSONInventory(player);        
+            if (parsed != null)
+            {
+                parsed.bank = parsed.bank + TotalValueOfVehicles;
+                newBankVal.Text = parsed.bank;
+                NewMoney = JsonConvert.SerializeObject(parsed);
+            }
 
+            if (player != null) CombineJSONInventory(player);
         }
 
         private void CombineJSONInventory(PlayerData player)
         {
             // Finally we are going to do an inventory parse to put everything in a single inventory string. 
-            List<dynamic> combined = new List<dynamic>();
-            foreach (var jsonString in player.Inventory)
+            var combined = new List<dynamic>();
+            foreach (var list in player.Inventory.Select(jsonString => JsonConvert.DeserializeObject<List<dynamic>>(jsonString)))
             {
-                // Parse each JSON string into a list of objects
-                var list = JsonConvert.DeserializeObject<List<dynamic>>(jsonString);
-
                 // Combine these lists
-                combined.AddRange(list);
+                if (list != null) combined.AddRange(list);
             }
 
             // Convert the combined list back into a JSON string
-            string combinedJson = JsonConvert.SerializeObject(combined);
+            var combinedJson = JsonConvert.SerializeObject(combined);
 
             // Parse the combined JSON string into a list of objects
             var combinedList = JsonConvert.DeserializeObject<List<dynamic>>(combinedJson);
@@ -196,33 +194,41 @@ namespace UVRPV2tov3Migration
             var luaItems = GetLUAItems(NewItemsLUA.Text);
 
             // Use a loop to check each object in the combined list
-            for (int i = combinedList.Count - 1; i >= 0; i--)
+            if (combinedList != null)
             {
-                // If the object is not in the LUA file content, remove it
-                if (!luaItems.ContainsKey((string)combinedList[i].name))
+                for (var i = combinedList.Count - 1; i >= 0; i--)
                 {
-                    combinedList.RemoveAt(i);
+                    // If the object is not in the LUA file content, remove it
+                    if (!luaItems.ContainsKey((string)combinedList[i].name))
+                    {
+                        combinedList.RemoveAt(i);
+                    }
                 }
+
+                // Convert the list back into a JSON string
+                combinedJson = JsonConvert.SerializeObject(combinedList);
             }
 
-            // Convert the list back into a JSON string
-            combinedJson = JsonConvert.SerializeObject(combinedList);
             // Parse the JSON string into a list of dynamic objects
             var items = JsonConvert.DeserializeObject<List<dynamic>>(combinedJson);
 
             // Initialize the slot counter
-            int slotCounter = 1;
+            var slotCounter = 1;
 
             // Loop through each item in the list
-            foreach (var item in items)
+            if (items != null)
             {
-                // Update the slot number for the current item
-                item.slot = slotCounter++;
+                foreach (var item in items)
+                {
+                    // Update the slot number for the current item
+                    item.slot = slotCounter++;
+                }
+
+                // Convert the updated list back into a JSON string
+                var updatedJson = JsonConvert.SerializeObject(items);
+                NewStash = updatedJson;
             }
 
-            // Convert the updated list back into a JSON string
-            var updatedJson = JsonConvert.SerializeObject(items);
-            NewStash = updatedJson;
             rt1.Text = NewStash;
         }
         private Dictionary<string, dynamic> GetLUAItems(string luaFilePath)
@@ -254,18 +260,17 @@ namespace UVRPV2tov3Migration
 
         private void button1_Click(object sender, EventArgs e)
         {
-            if (CharacterSelect.Items.Count > 0)
+            if (CharacterSelect.Items.Count <= 0) return;
+            
+            if (CharacterSelect.SelectedIndex < CharacterSelect.Items.Count - 1)
             {
-                if (CharacterSelect.SelectedIndex < CharacterSelect.Items.Count - 1)
-                {
-                    CharacterSelect.SelectedIndex += 1;
-                    NextButton.Enabled = true;
-                }
-                else
-                {
-                    // If it's the last item, disable the button
-                    NextButton.Enabled = false;
-                }
+                CharacterSelect.SelectedIndex += 1;
+                NextButton.Enabled = true;
+            }
+            else
+            {
+                // If it's the last item, disable the button
+                NextButton.Enabled = false;
             }
 
         }
@@ -273,18 +278,17 @@ namespace UVRPV2tov3Migration
         private void button2_Click(object sender, EventArgs e)
         {
             DB.UpdateData(destinationServer.Text,destinationUser.Text, destinationDB.Text, NewStash, CitizenID.Text, newStash.Text, NewMoney);
-            if (CharacterSelect.Items.Count > 0)
+            if (CharacterSelect.Items.Count <= 0) return;
+            
+            if (CharacterSelect.SelectedIndex < CharacterSelect.Items.Count - 1)
             {
-                if (CharacterSelect.SelectedIndex < CharacterSelect.Items.Count - 1)
-                {
-                    CharacterSelect.SelectedIndex += 1;
-                    NextButton.Enabled = true;
-                }
-                else
-                {
-                    // If it's the last item, disable the button
-                    NextButton.Enabled = false;
-                }
+                CharacterSelect.SelectedIndex += 1;
+                NextButton.Enabled = true;
+            }
+            else
+            {
+                // If it's the last item, disable the button
+                NextButton.Enabled = false;
             }
         }
     }
