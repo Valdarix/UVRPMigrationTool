@@ -12,4 +12,4 @@ This program will
 -Combine the new stash from the current live database with the reimbursement stash from the old database into a single stash. 
 -Pulls current stash ID from new database so it knows where to put the new stash.
 -Can update each player one at a time with a single click to reimburse both the cash from cars and the inventory items or provides data needed on screen if more comfortable putting it in manually.
-UPDATE 07/03/2023: Now automatically pulls the players savings account information and adds it to the total amount to be reimbursed.
+-UPDATE 07/03/2023: Now automatically pulls the players savings account information and adds it to the total amount to be reimbursed.
